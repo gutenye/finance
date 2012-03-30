@@ -1,4 +1,6 @@
 Finance::Application.routes.draw do
+  resources :trades
+
 	root :to => "home#index"
 
   # The priority is based upon order of creation:

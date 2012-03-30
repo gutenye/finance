@@ -2,6 +2,8 @@ A.Btc = Ember.Namespace.create()
 A.Btc.MtGox = Ember.Namespace.create()
 
 A.Trade = DS.Model.extend
+  primaryKey: "_id"
+
   tid: DS.attr("number")
   date: DS.attr("date")
   price: DS.attr("number")

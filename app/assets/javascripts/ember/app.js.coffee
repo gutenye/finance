@@ -14,6 +14,8 @@ window.A = window.App = Ember.Application.create
 window.V = Ember.Namespace.create() # View
 window.C = Ember.Namespace.create() # Controller
 window.S = Ember.Namespace.create() # State
+window.Rc = Ember.Object.create
+  amount_filter: 10  # only display amount >=10
 
 # mtgox realtime graph
 C.realtime = Ember.ArrayController.create
@@ -60,35 +62,37 @@ V.Home = Ember.View.extend
     width: 1000
     height: 400
     padding: 20
-    _width: (-> @get("width") + @get("padding")*10).property("width", "padding")
+    _width: (-> @get("width") + @get("padding")*20).property("width", "padding")
     _height: (-> @get("height") + @get("padding")*2).property("height", "padding")
 
     update: (->
       [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
       data = C.realtime.get("content")
-      data.forEach (d)->
-        d.time = new Date((+d.time)*1000)
-        d.price = +d.price
-        d.amount = +d.amount
+      data_amount = data.filter( (d)-> d.amount >= Rc.amount_filter )
 
-      @x.domain([data[0].time, data[data.length-1].time])
+      @x.domain([data[0].date, data[data.length-1].date])
       @y.domain([d3.min(data, (d)->d.price), d3.max(data, (d)->d.price)])
+      @z.domain([0, d3.max(data, (d)->d.amount)])
 
       # x axis
-      axis = @svg.selectAll(".x.axis").data([1])
-      axis.enter().append("g").attr("class", "x axis").attr("transform", "translate(0, #{h})")
-      axis.call(@xAxis.ticks(d3.time.hours, 2).tickSize(0,0))
+      #@svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.minutes, 4).tickSize(0,0))
+      @svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.hours, 2).tickSize(0,0))
 
       # y axis
-      axis = @svg.selectAll(".y.axis").data([1])
-      axis.enter().append("g").attr("class", "y axis").attr("transform", "translate(#{w},0)")
-      axis.call(@yAxis.tickSize(0,0))
+      @svg.selectAll(".y.axis").call(@yAxis.tickSize(0,0))
 
       # y grid
-      grid = @svg.selectAll(".y.grid").data([1])
-      grid.enter().append("g").attr("class", "y grid").attr("transform", "translate(#{w}, 0)")
-      grid.call(@yAxis.tickSize(-w,0))
+      @svg.selectAll(".y.grid").call(@yAxis.tickSize(-w,0))
+
+      # z axis
+      @svg.selectAll(".z.axis").call(@zAxis.tickSize(0,0))
+
+      # z bars
+      bar = @svg.select("#bars").selectAll(".bar").data(data_amount)
+      bar.enter().append("line").attr("class", "bar").attr("x1", (d)=> @x(d.date)).attr("x2", (d)=> @x(d.date)).attr("y1", 0).attr("y2", (d)=>-1 * @z(d.amount))
+      bar.attr("x1", (d)=> @x(d.date)).attr("x2", (d)=>@x(d.date))
+      bar.exit().remove()
 
       # path
       path = @svg.selectAll(".line").data([1])
@@ -101,28 +105,39 @@ V.Home = Ember.View.extend
 
       # ¤scales
       @x = d3.time.scale().range([0, w])
-      @y = d3.scale.linear().range([h, 0])
+      @y = d3.scale.linear().range([0, h])
+      @z = d3.scale.linear().range([0, h])
 
       # ¤axies
       @xAxis = d3.svg.axis().scale(@x).orient("bottom")
       @yAxis = d3.svg.axis().scale(@y).orient("right")
+      @zAxis = d3.svg.axis().scale(@z).orient("left")
 
       # ¤line
       @line = d3.svg.line()
-        .x( (d)-> @x(d.time) )
+        .x( (d)-> @x(d.date) )
         .y( (d)-> @y(d.price) )
 
-      @svg = d3.select("#realtime")
-        .append("g").attr("transform", "translate(#{p},#{p})")
+      @svg = d3.select("#realtime").append("g").attr("transform", "translate(#{p*2},#{p})")
+      @svg.append("g").attr("class", "x axis").attr("transform", "translate(0, #{h})")
+      @svg.append("g").attr("class", "y axis").attr("transform", "translate(#{w},0)")
+      @svg.append("g").attr("class", "y grid").attr("transform", "translate(#{w}, 0)")
+      @svg.append("g").attr("class", "z axis").attr("transform", "translate(0, 0)")
+      @svg.append("g").attr("id", "bars").attr("transform", "translate(0, #{h})")
 
       get_data = ->
-        end = Ember.DateTime.create()
-        start = Ember.DateTime.create(day: end.day-1)
+        start = moment().subtract("days", 1).valueOf() / 1000
+        end = moment().valueOf() / 1000
 
-        data = A.store.find(A.Trade, {start: 1, end: 2})
-        C.realtime.set "content", data
+        $.get "/trades.json", {start: start, end: end}, (data) ->
+          data = data["trades"]
+          data.forEach (d)->
+            d.date = new Date(d.date)
+
+          C.realtime.set "content", data
+
         get_data
-      @t = setInterval(get_data(), 60*10000)
+      @t = setInterval(get_data(), 60*1000)
 
     willDestroyElement: ->
       clearInterval(@t)

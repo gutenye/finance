@@ -6,6 +6,7 @@ module App
 
     def start
       last_tid = Btc::MtGox::Trade.exists? ? Btc::MtGox::Trade.last.tid : 0
+      #last_tid = 1333031828998528
 
       loop do
         trades = MtGox.trades :since => last_tid
