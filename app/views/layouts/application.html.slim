@@ -1,0 +1,22 @@
+doctype html
+html
+  head
+    title Finance
+    = stylesheet_link_tag "application", :media => "all"
+    = csrf_meta_tags 
+
+  - action_name = {create: "new", update: "edit"}[params[:action].to_sym] || params[:action]
+  - controller_name = params[:controller].gsub(%r~/~, ' ')
+  body class="#{controller_name} #{action_name}" 
+    div.navbar.navbar-fixed-top
+      div.navbar-inner
+        div.container
+          a.brand href="#" Finance
+          ul.nav
+            li
+              a href="#empty" Empty
+
+    div.container
+      = yield
+
+    = javascript_include_tag "application"
