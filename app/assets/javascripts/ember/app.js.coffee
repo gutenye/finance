@@ -69,7 +69,11 @@ V.Home = Ember.View.extend
       [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
       data = C.realtime.get("content")
-      data_amount = data.filter( (d)-> d.amount >= Rc.amount_filter )
+      # 144 bars. one bar per 10 minutes
+      slice_length = data.length._div(144)
+      amount_data = [ ] # [ [date, amount], ..]
+      data._eachSlice slice_length, (datas)->
+        amount_data._push [datas._last().date, datas._sum((d)->d.amount)]
 
       @x.domain([data[0].date, data[data.length-1].date])
       @y.domain([d3.min(data, (d)->d.price), d3.max(data, (d)->d.price)])
@@ -89,9 +93,9 @@ V.Home = Ember.View.extend
       @svg.selectAll(".z.axis").call(@zAxis.tickSize(0,0))
 
       # z bars
-      bar = @svg.select("#bars").selectAll(".bar").data(data_amount)
-      bar.enter().append("line").attr("class", "bar").attr("x1", (d)=> @x(d.date)).attr("x2", (d)=> @x(d.date)).attr("y1", 0).attr("y2", (d)=>-1 * @z(d.amount))
-      bar.attr("x1", (d)=> @x(d.date)).attr("x2", (d)=>@x(d.date))
+      bar = @svg.select("#bars").selectAll(".bar").data(amount_data)
+      bar.enter().append("line").attr("class", "bar").attr("x1", (d)=> @x(d[0])).attr("x2", (d)=> @x(d[0])).attr("y1", h).attr("y2", (d)=>@z(d[1]))
+      bar.attr("x1", (d)=> @x(d[0])).attr("x2", (d)=>@x(d[0]))
       bar.exit().remove()
 
       # path
@@ -105,8 +109,8 @@ V.Home = Ember.View.extend
 
       # ¤scales
       @x = d3.time.scale().range([0, w])
-      @y = d3.scale.linear().range([0, h])
-      @z = d3.scale.linear().range([0, h])
+      @y = d3.scale.linear().range([h, 0])
+      @z = d3.scale.linear().range([h, 0])
 
       # ¤axies
       @xAxis = d3.svg.axis().scale(@x).orient("bottom")
@@ -122,8 +126,8 @@ V.Home = Ember.View.extend
       @svg.append("g").attr("class", "x axis").attr("transform", "translate(0, #{h})")
       @svg.append("g").attr("class", "y axis").attr("transform", "translate(#{w},0)")
       @svg.append("g").attr("class", "y grid").attr("transform", "translate(#{w}, 0)")
-      @svg.append("g").attr("class", "z axis").attr("transform", "translate(0, 0)")
-      @svg.append("g").attr("id", "bars").attr("transform", "translate(0, #{h})")
+      @svg.append("g").attr("class", "z axis")
+      @svg.append("g").attr("id", "bars")
 
       get_data = ->
         start = moment().subtract("days", 1).valueOf() / 1000

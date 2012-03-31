@@ -21,9 +21,8 @@ module App
       loop do
         @pull.recv_string(msg)
         data = JSON.parse(msg)
-        #puts "REALTIME recv_string #{data["trade"]["tid"]}"
 
-        t = MtGox::Trade.new(data["trade"])
+        t = MtGox::Trade.new(data)
         @cache << t
 
         if $fetch_history_done

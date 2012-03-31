@@ -4,9 +4,10 @@
 #= require d3.v2
 #= require moment
 #= require twitter/bootstrap
-#= require ./bootstrap
 #= require ember
 #= require ember-data
 #= require ember-routing
 #= require ember-ext
+#= require tagen
+#= require ./bootstrap
 #= require ./ember/app
