@@ -27,7 +27,7 @@ module App
 
         if $fetch_history_done
           @cache.each{|v| 
-            puts "REALTIME Trade.find_or_create #{v.tid}"
+            puts "REALTIME Trade.find_or_create #{v.tid} #{v.date}"
             Btc::MtGox::Trade.find_or_create_by(v.to_hash(:tid, :date, :price, :amount, :trade_type))
           }
           @cache.clear

@@ -65,3 +65,5 @@ module Finance
     config.sass.preferred_syntax = :sass
   end
 end
+
+require "app"

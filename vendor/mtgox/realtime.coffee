@@ -8,22 +8,26 @@ IPC = "ipc:///tmp/guten.finance.ipc"
 push = zmq.socket("push")
 push.bindSync(IPC)
 
-client = mtgox.connect()
-client.on "open", ->
-  pd "open"
-  client.unsubscribe mtgox.getChannel("depth").key
-  client.unsubscribe mtgox.getChannel("ticker").key
+connect = ->
+  client = mtgox.connect()
+  client.on "open", ->
+    pd "open"
+    client.unsubscribe mtgox.getChannel("depth").key
+    client.unsubscribe mtgox.getChannel("ticker").key
 
-client.on "error", (err)->
-  pd "error", err
+  client.on "error", (err)->
+    pd "error", err
+    connect()
 
-client.on "close", ->
-  pd "close"
+  client.on "close", ->
+    pd "close"
 
-client.on "trade", (data) ->
-  data = data["trade"]
+  client.on "trade", (data) ->
+    data = data["trade"]
 
-  # skip non-USD currency 
-  return unless data["price_currency"] == "USD"   
+    # skip non-USD currency 
+    return unless data["price_currency"] == "USD"   
 
-  push.send JSON.stringify(data)
+    push.send JSON.stringify(data)
+
+connect()
