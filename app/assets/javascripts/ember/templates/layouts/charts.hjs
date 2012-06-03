@@ -1,0 +1,10 @@
+<ul>
+  <li>
+    <a href="#/charts/realtime">Realtime</a>
+  </li>
+  <li>
+    <a href="#/charts/candle">Candle</a>
+  </li>
+</ul>
+
+{{dynamicView}}

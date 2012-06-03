@@ -1,12 +1,12 @@
 module App
   class << self
     def gen_db_mtgox
-      MtGox.new.main
+      MtGoxDatabase.new.main
     end
   end
 
   # popluate Btc::MtGox::Trade data
-  class MtGox
+  class MtGoxDatabase
     def gen_data(last_date, latest_date)
       map = <<-EOF
 function(){
@@ -47,7 +47,8 @@ function(key, values){
       # puts "result", rst.find.to_a
 
       db = Mongoid.master
-      db["tmp"].find.each{ |doc| db["btc_mt_gox_candles"].insert(doc["value"].tap{|v|v.delete("price")}) }
+      db["tmp"].find.each{ |doc| db["btc_mt_gox_trade_by_candles"].insert(doc["value"].tap{|v|v.delete("price")}) }
+      db["tmp"].remove
     end
 
     # reduce time to a day.
@@ -58,7 +59,7 @@ function(key, values){
     def main
       return unless Btc::MtGox::Trade.exists?
 
-      last_date = Btc::MtGox::Candle.exists? ? Btc::MtGox::Candle.last.date+1.day : time2day(Btc::MtGox::Trade.first.date)
+      last_date = Btc::MtGox::TradeByCandle.exists? ? Btc::MtGox::TradeByCandle.last.date+1.day : time2day(Btc::MtGox::Trade.first.date)
       latest_date = time2day(Btc::MtGox::Trade.last.date)
 
       return if last_date >= latest_date

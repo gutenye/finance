@@ -8,4 +8,11 @@ class TradesController < ApplicationController
     #@trades = Btc::MtGox::Trade.limit(10)
     respond_with trades: @trades 
   end
+
+  def by_candle
+    query = {:date => params[:start].to_f..params[:end].to_f}
+
+    @trades = Btc::MtGox::TradeByCandle.where(query)
+    respond_with trades: @trades
+  end
 end
