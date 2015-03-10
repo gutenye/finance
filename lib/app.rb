@@ -1,42 +1,40 @@
+log = puts
+
 module App
   class << self
-    def gen_db_mtgox
-      MtGoxDatabase.new.main
+    def mtgox_by_candle
+      MtGoxByCandle.new.main
+    end
+
+    def mtgox_by_minute
+      MtGoxByMinute.new.main
     end
   end
 
   # popluate Btc::MtGox::Trade data
-  class MtGoxDatabase
+  class MtGoxByCandle
     def gen_data(last_date, latest_date)
       map = <<-EOF
 function(){
   var d = this.date;
   var date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  emit(date, { price: this.price, amount: this.amount,  
-                date: date, open: this.price, close: this.price, high: this.price, low: this.price });
+  emit(date, { date: date, amount: this.amount, open: this.price, close: this.price, high: this.price, low: this.price });
 }
-
       EOF
 
       reduce = <<-EOF
 function(key, values){
-  var result = { price: -1, amount: 0,
-                  date: key, open: null, close: null, high: 0, low: Number.MAX_VALUE };
+  var result = { date: key, amount: 0, open: values[0].open, close: values[values.length-1].close, high: values[0].high, low: values[0].low};
 
   values.forEach(function(value){
     result.amount += value.amount;
 
-    if (result.open == null)
-      result.open = value.price;
+    if (result.high < value.high)
+      result.high = value.high;
 
-    result.close = value.price;
-
-    if (result.high < value.price)
-      result.high = value.price;
-
-    if (result.low > value.price)
-      result.low = value.price;
+    if (result.low > value.low)
+      result.low = value.low;
   });
 
   return result;
@@ -44,7 +42,7 @@ function(key, values){
       EOF
 
       rst = Btc::MtGox::Trade.collection.map_reduce(map, reduce, :out => "tmp", :query => {"date" => {"$gte" => last_date , "$lt" => latest_date}})
-      # puts "result", rst.find.to_a
+      #pd "result", rst.find.to_a
 
       db = Mongoid.master
       db["tmp"].find.each{ |doc| db["btc_mt_gox_trade_by_candles"].insert(doc["value"].tap{|v|v.delete("price")}) }
@@ -52,15 +50,76 @@ function(key, values){
     end
 
     # reduce time to a day.
-    def time2day(t)
+    def reduce_time(t)
       Time.new(t.year, t.month, t.day)
     end
 
     def main
       return unless Btc::MtGox::Trade.exists?
 
-      last_date = Btc::MtGox::TradeByCandle.exists? ? Btc::MtGox::TradeByCandle.last.date+1.day : time2day(Btc::MtGox::Trade.first.date)
-      latest_date = time2day(Btc::MtGox::Trade.last.date)
+      last_date = Btc::MtGox::TradeByCandle.exists? ? Btc::MtGox::TradeByCandle.last.date+1.day : reduce_time(Btc::MtGox::Trade.first.date)
+      latest_date = reduce_time(Btc::MtGox::Trade.last.date)
+
+      return if last_date >= latest_date
+
+      gen_data(last_date, latest_date)
+    end
+  end
+
+  # populate Btc::MtGox::TradeByMinute data
+  class MtGoxByMinute
+    def gen_data(last_date, latest_date)
+map = <<EOF
+function(){
+  var d = this.date;
+  var date = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes());
+
+  emit(date, { date: date, total_price: this.price, amount: this.amount, count: 1, price: 0});
+}
+EOF
+
+reduce = <<EOF
+function(key, values){
+  var result = { date: key, total_price: 0, amount: 0, count: 0, price: 0};
+
+  values.forEach(function(value){
+    result.amount += value.amount;
+    result.total_price += value.total_price;
+    result.count += value.count;
+  });
+
+  return result;
+}
+EOF
+
+finalize = <<EOF
+function(key, value){
+  if (value.count > 0)
+    value.price = value.total_price / value.count;
+
+  return value;
+}
+EOF
+
+      rst = Btc::MtGox::Trade.collection.map_reduce(map, reduce, :out => "tmp2", :finalize => finalize, :query => {"date" => {"$gte" => last_date , "$lt" => latest_date}})
+      #pd "result", rst.find.to_a
+
+      db = Mongoid.master
+      db["tmp2"].find.each{ |doc| db["btc_mt_gox_trade_by_minutes"].insert(doc["value"].tap{|v|v.delete("total_price"); v.delete("count")}) }
+      db["tmp2"].remove
+    end
+
+    # reduce time to a day.
+    def reduce_time(t)
+      Time.new(t.year, t.month, t.day, t.hour, t.min)
+    end
+
+    def main
+      return unless Btc::MtGox::Trade.exists?
+
+      #last_date = Btc::MtGox::TradeByMinute.exists? ? Btc::MtGox::TradeByMinute.last.date+1.minute : reduce_time(Btc::MtGox::Trade.first.date)
+      last_date = Btc::MtGox::TradeByMinute.exists? ? Btc::MtGox::TradeByMinute.last.date+1.minute : Time.new(2012,5,7)
+      latest_date = reduce_time(Btc::MtGox::Trade.last.date)
 
       return if last_date >= latest_date
 

@@ -23,19 +23,20 @@ window.S = Ember.Namespace.create() # State
 window.L = Ember.Namespace.create() # Layout
 window.Rc = Ember.Object.create
   amount_filter: 10  # only display amount >=10
+  chart:
+    controller: null
+    type: null
+    start: null
+    end: null
 
-A.fetch_data = ->
-  start = moment().subtract("days", 1).valueOf() / 1000
-  end = moment().valueOf() / 1000
-
-  $.get "/trades.json", {start: start, end: end}, (data) ->
+A.fetchTrades = ->
+  $.get "/trades.json", {type: Rc.chart.type , start: Rc.chart.start(), end: Rc.chart.end()}, (data) ->
     data = data["trades"]
     data.forEach (d)->
       d.date = new Date(d.date)
+    Rc.chart.controller.set "content", data
 
-    C.realtime.set "content", data
-
-  A.fetch_data
+  A.fetchTrades
 
 # ¤route
 A.Router = Ember.Router.extend
@@ -51,7 +52,6 @@ A.Router = Ember.Router.extend
     charts: Ember.State.extend
       route: "/charts"
       enter: ()->
-        pd "enter"
         L.root.set "content", L.charts
 
       index: Ember.State.extend
@@ -63,14 +63,51 @@ A.Router = Ember.Router.extend
         connectOutlets: ()->
           L.charts.set "content", V.Charts.Realtime.create()
         enter: ()->
-          A.t = setInterval(A.fetch_data(), 60*1000)
+          Rc.chart.controller = C.realtime
+          Rc.chart.type = "minute"
+          Rc.chart.start = ()-> moment().subtract("days", 1).valueOf() / 1000
+          Rc.chart.end = ()-> moment().valueOf() / 1000
+          A.t = setInterval(A.fetchTrades(), 60*1000)
         exit: ()->
           clearInterval(A.t)
+
+        oneDay: ()->
+          Rc.chart.start = ()-> moment().subtract("days", 1).valueOf() / 1000
+          A.fetchTrades()
+
+        twoDay: ()->
+          Rc.chart.start = ()-> moment().subtract("days", 2).valueOf() / 1000
+          A.fetchTrades()
+
+        threeDay: ()->
+          Rc.chart.start = ()-> moment().subtract("days", 3).valueOf() / 1000
+          A.fetchTrades()
 
       candle: Ember.State.extend
         route: "/candle"
         connectOutlets: ()->
           L.charts.set "content", V.Charts.Candle.create()
+        enter: ()->
+          Rc.chart.controller = C.candle
+          Rc.chart.type = "candle"
+          Rc.chart.start = ()-> moment().subtract("years", 1).valueOf() / 1000
+          Rc.chart.end = ()-> moment().valueOf() / 1000
+          A.t = setInterval(A.fetchTrades(), 24*3600*1000)
+        exit: ()->
+          clearInterval(A.t)
+
+        oneMonth: ()->
+          Rc.chart.start = ()-> moment().subtract("months", 1).valueOf() / 1000
+          A.fetchTrades()
+        twoMonth: ()->
+          Rc.chart.start = ()-> moment().subtract("months", 2).valueOf() / 1000
+          A.fetchTrades()
+        threeMonth: ()->
+          Rc.chart.start = ()-> moment().subtract("months", 3).valueOf() / 1000
+          A.fetchTrades()
+        oneYear: ()->
+          Rc.chart.start = ()-> moment().subtract("years", 1).valueOf() / 1000
+          A.fetchTrades()
 
 
 # ¤controller
@@ -102,7 +139,7 @@ V.Root = Ember.View.extend
 V.ChartView = Ember.View.extend
   template: Ember.Handlebars.compile("")
   tagName: "svg"
-  #elementId: "realtime"  # IMPL
+  elementId: "chart"
   classNames: ["chart"]
   attributeBindings: ["_width:width", "_height:height"] 
 
@@ -127,84 +164,110 @@ V.ChartView = Ember.View.extend
     @yAxis = d3.svg.axis().scale(@y).orient("right")
     @zAxis = d3.svg.axis().scale(@z).orient("left")
 
-    # ¤line
-    @line = d3.svg.line()
-      .x( (d)-> @x(d.date) )
-      .y( (d)-> @y(d.price) )
-
     @svg = d3.select("##{elementId}").append("g").attr("transform", "translate(#{p*2},#{p})")
-    @svg.append("g").attr("class", "x axis").attr("transform", "translate(0, #{h})")
+    @svg.append("g").attr("class", "x axis").attr("transform", "translate(0,#{h})")
     @svg.append("g").attr("class", "y axis").attr("transform", "translate(#{w},0)")
-    @svg.append("g").attr("class", "y grid").attr("transform", "translate(#{w}, 0)")
+    @svg.append("g").attr("class", "y grid").attr("transform", "translate(#{w},0)")
     @svg.append("g").attr("class", "z axis")
-    @svg.append("g").attr("id", "bars")
 
 V.Charts = 
-  Realtime: V.ChartView.extend
+  Realtime: Ember.View.extend
+    templateName: "ember/templates/charts/realtime"
     elementId: "realtime"
+    controller: C.realtime
 
-    # obverse("C.realtine.content")
-    update: (->
-      [w, h, p] = [@get("width"), @get("height"), @get("padding")]
+    chart: V.ChartView.extend
+      didInsertElement: ()->
+        @_super()
+        [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
-      data = C.realtime.get("content")
-      # 144 bars. one bar per 10 minutes
-      slice_length = data.length._div(144)
-      amount_data = [ ] # [ [date, amount], ..]
-      data._eachSlice slice_length, (datas)->
-        amount_data._push [datas._last().date, datas._sum((d)->d.amount)]
+        @line = d3.svg.line()
+          .x((d)=>@x(d.date))
+          .y((d)=>@y(d.price))
 
-      @x.domain([data[0].date, data[data.length-1].date])
-      @y.domain([d3.min(data, (d)->d.price), d3.max(data, (d)->d.price)])
-      @z.domain([0, d3.max(data, (d)->d.amount)])
+        @linebar = d3.svg.linebar()
+          .x((d)=>@x(d.date))
+          .y0(@z(0))
+          .y1((d)=>@z(d.amount))
+          
+        @svg.append("path")
+          .attr("id", "path")
+          .attr("class", "line")
 
-      # x axis
-      #@svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.minutes, 4).tickSize(0,0))
-      @svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.hours, 2).tickSize(0,0))
+        @svg.append("path")
+          .attr("id", "bars")
+          
+      update: (->
+        [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
-      # y axis
-      @svg.selectAll(".y.axis").call(@yAxis.tickSize(0,0))
+        data = C.realtime.get("content")
 
-      # y grid
-      @svg.selectAll(".y.grid").call(@yAxis.tickSize(-w,0))
+        @x.domain([data[0].date, data[data.length-1].date])
+        @y.domain([d3.min(data, (d)->d.price), d3.max(data, (d)->d.price)])
+        @z.domain([0, d3.max(data, (d)->d.amount)])
 
-      # z axis
-      @svg.selectAll(".z.axis").call(@zAxis.tickSize(0,0))
+        # x-axis, y-axis, y-grid, z-axis
+        @svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.hours, 2).tickSize(0,0))
+        @svg.selectAll(".y.axis").call(@yAxis.tickSize(0,0))
+        @svg.selectAll(".y.grid").call(@yAxis.tickSize(-w,0))
+        @svg.selectAll(".z.axis").call(@zAxis.tickSize(0,0))
 
-      # z bars
-      bar = @svg.select("#bars").selectAll(".bar").data(amount_data)
-      bar.enter().append("line").attr("class", "bar").attr("x1", (d)=> @x(d[0])).attr("x2", (d)=> @x(d[0])).attr("y1", h).attr("y2", (d)=>@z(d[1]))
-      bar.attr("x1", (d)=> @x(d[0])).attr("x2", (d)=>@x(d[0]))
-      bar.exit().remove()
+        # z bars
+        @svg.select("#bars")
+          .attr("d", @linebar(data))
 
-      # path
-      path = @svg.selectAll(".line").data([1])
-      path.enter().append("path").attr("class", "line")
-      path.attr("d", @line(data))
-    ).observes("C.realtime.content")
+        # path
+        @svg.select("#path")
+          .attr("d", @line(data))
+      ).observes("C.realtime.content")
 
-  Candle: V.ChartView.extend
+  Candle: Ember.View.extend
+    templateName: "ember/templates/charts/candle"
     elementId: "candle"
+    controller: C.candle
 
-    update: (->
-      pd "update"
-      [w, h, p] = [@get("width"), @get("height"), @get("padding")]
+    chart: V.ChartView.extend
+      didInsertElement: ()->
+        @_super()
+        [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
-      data = C.realtime.get("content")
-      candle_data = []
-      for d in data
-        candle_data.push [d.open, d.close, d.high, d.low]
+        @candle = d3.svg.candle()
+          .x((d)=>@x(d.date))
+          .open((d)=>@y(d.open))
+          .close((d)=>@y(d.close))
+          .high((d)=>@y(d.high))
+          .low((d)=>@y(d.low))
 
-      @candle.domain([0, 100])
+      update: (->
+        [w, h, p] = [@get("width"), @get("height"), @get("padding")]
 
-      @svg = @svg.append("g")
-        .selectAll("path")
-          .data(candle_data)
-        .enter().insert("path")
+        data = C.candle.get("content")
+
+        @x.domain([data[0].date, data[data.length-1].date])
+        @y.domain([d3.min(data, (d)->d.low), d3.max(data, (d)->d.high)])
+        @z.domain([0, d3.max(data, (d)->d.amount)])
+
+        # x-axis, y-axis, y-grid, z-axis
+        @svg.selectAll(".x.axis").call(@xAxis.ticks(d3.time.months, 1).tickSize(0,0))
+        @svg.selectAll(".y.axis").call(@yAxis.tickSize(0,0))
+        @svg.selectAll(".y.grid").call(@yAxis.tickSize(-w,0))
+        @svg.selectAll(".z.axis").call(@zAxis.tickSize(0,0))
+
+        @svg.select("#candleChart").remove()
+        chart = @svg.append("svg")
+          .attr("id", "candleChart")
+          .attr("class", "candleChart")
+
+        chart = chart.selectAll("path")
+          .data(data)
+
+        chart.enter().insert("path")
           .attr("d", @candle)
-          .attr("class", (d) -> if (d[0]-d[1])>0 then "down" else "up")
+          .attr("class", (d) -> if (d.open-d.close)>0 then "down" else "up")
 
-    ).observes("C.candle.content")
+        chart.exit().remove()
+
+      ).observes("C.candle.content")
 
 # ¤end
 L.root.append()

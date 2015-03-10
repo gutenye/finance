@@ -19,6 +19,7 @@ gem "momentjs-rails"
 gem "guten-mtgox", :path => "/home/guten/dev/one/mtgox", :require => "mtgox"
 # gem "emberjs-rails"
 gem "rufus-scheduler"
+gem "d3-tagen", :path => "/home/guten/dev/one/d3-tagen"
 
 group :assets do
   gem "sass-rails",   "~> 3.2.3"

@@ -8,6 +8,11 @@ GIT
       railties (~> 3.1)
 
 PATH
+  remote: /home/guten/dev/one/d3-tagen
+  specs:
+    d3-tagen (0.0.1)
+
+PATH
   remote: /home/guten/dev/one/mtgox
   specs:
     guten-mtgox (0.8.0)
@@ -236,6 +241,7 @@ PLATFORMS
 DEPENDENCIES
   bson_ext
   coffee-rails (~> 3.2.1)
+  d3-tagen!
   d3_rails
   ember-rails!
   factory_girl_rails

@@ -1,0 +1,6 @@
+<button {{action oneDay}}>1d</button>
+<button {{action twoDay}}>2d</button>
+<button {{action threeDay}}>3d</button>
+
+{{view view.chart}}
+

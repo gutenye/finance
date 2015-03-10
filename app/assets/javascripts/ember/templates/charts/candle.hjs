@@ -1,0 +1,6 @@
+<button {{action oneMonth}}>1m</button>
+<button {{action twoMonth}}>2m</button>
+<button {{action threeMonth}}>3m</button>
+<button {{action oneYear}}>1y</button>
+
+{{view view.chart}}

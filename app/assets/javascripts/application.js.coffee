@@ -3,7 +3,7 @@
 #= require jquery
 #= require jquery_ujs
 #= require d3.v2
-#= require d3_tagen
+#= require d3-tagen
 #= require moment
 #= require twitter/bootstrap
 #

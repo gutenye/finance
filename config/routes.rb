@@ -1,7 +1,5 @@
 Finance::Application.routes.draw do
-  resources :trades do
-    get "by_candle"
-  end
+  resources :trades
 
 	root :to => "home#index"
 
